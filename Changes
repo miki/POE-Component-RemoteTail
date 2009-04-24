@@ -1,0 +1,29 @@
+Revision history for Perl extension POE::Component::RemoteTail
+
+0.01006     2009/03/01
+        - correct a mistake of POD
+
+0.01005     2009/03/01
+        add some improvement about problems argued in perlmonks
+
+         * http://www.perlmonks.org/?node_id=746039
+
+        - ocrrect a mistake of PoCo::RemoteTail::CustomEngine::NetSSHPerl
+        - error handlings are improved slightly
+        - add some parameters to PoCo::RemoteTail::Job to be albe to use command-line options 
+
+0.01004     2008/08/16
+        - correct a mistake of POD, again ( Oops! )
+
+0.01003     2008/08/15
+        - correct a mistake of POD
+        - add some 'build_requires' line at Makefile.PL
+
+0.01002     2008/07/09
+        - add some 'requires' line at Makefile.PL
+
+0.01001     2008/07/08
+        - rewrite all
+
+0.00001_00  2008/06/30
+        - DEVELOPER RELEASE
