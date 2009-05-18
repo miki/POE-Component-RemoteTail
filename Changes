@@ -1,5 +1,9 @@
 Revision history for Perl extension POE::Component::RemoteTail
 
+0.01007     2009/05/19
+        - remove IO::Pty
+        - fix POD a little
+
 0.01006     2009/03/01
         - correct a mistake of POD
 

@@ -31,7 +31,7 @@ POE::Session->create(
                     postback => $postback
                 }
             );
-            $kernel->delay_add( "stop_job", 1, $job );
+            $kernel->delay_add( "stop_job", 3, $job );
         },
         mypostback => sub {
             my ( $kernel, $session, $data ) = @_[ KERNEL, SESSION, ARG1 ];

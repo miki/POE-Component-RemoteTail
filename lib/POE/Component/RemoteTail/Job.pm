@@ -18,16 +18,16 @@ POE::Component::RemoteTail::Job - Job class.
 
 =head1 SYNOPSIS
 
-my $job = $tailer->job(
-    host        => '127.0.0.1',
-    path        => '/home/httpd/logs/access_log',
-    user        => 'admin',
-    ssh_options => '-i ~/.ssh/identity',
-    add_command => '| grep hoge', 
-);
+  my $job = $tailer->job(
+      host        => '127.0.0.1',
+      path        => '/home/httpd/logs/access_log',
+      user        => 'admin',
+      ssh_options => '-i ~/.ssh/identity',
+      add_command => '| grep hoge', 
+  );
 
-# $job would be transformed as below.
-# ssh -i ~/.ssh/identity -A 127.0.0.1 tail -f /home/httpd/access_log | grep hoge
+  # $job would be transformed as below.
+  # ssh -i ~/.ssh/identity -A 127.0.0.1 "tail -f /home/httpd/access_log | grep hoge"
 
 =head1 DESCRIPTION
 

@@ -7,7 +7,6 @@ requires 'POE::Wheel::Run';
 requires 'Class::Inspector';
 requires 'constant';
 requires 'UNIVERSAL::require';
-requires 'IO::Pty'; 
 build_requires 'Test::More';
 build_requires 'YAML';
 build_requires 'List::Util';

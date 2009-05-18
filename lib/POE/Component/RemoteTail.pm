@@ -5,12 +5,11 @@ use warnings;
 use POE;
 use POE::Wheel::Run;
 use POE::Component::RemoteTail::Job;
-use IO::Pty;
 use Class::Inspector;
 use constant DEBUG => 0;
 use UNIVERSAL::require;
 
-our $VERSION = '0.01006';
+our $VERSION = '0.01007';
 
 *debug = DEBUG
   ? sub {
@@ -98,8 +97,9 @@ sub _spawn_child {
 
     my $command = "ssh -A";
     $command .= ' ' . $ssh_options if $ssh_options;
-    $command .= " $user\@$host tail -f $path";
+    $command .= " $user\@$host \"tail -f $path";
     $command .= ' ' . $add_command if $add_command;
+    $command .= '"';
 
     # default Program ( go on a simple unix command )
     my %program = ( Program => $command );
@@ -116,7 +116,6 @@ sub _spawn_child {
     # run wheel
     my $wheel = POE::Wheel::Run->new(
         %program,
-        Conduit => 'pty-pipe',
         StdioFilter => POE::Filter::Line->new(),
         StdoutEvent => "_got_child_stdout",
         StderrEvent => "_got_child_stderr",
@@ -226,7 +225,7 @@ If you don't prepare 'postback', PoCo::RemoteTail outputs log data to child proc
 
   use POE::Component::RemoteTail;
   
-  my $tailer = POE::Component::RemoteTail();
+  my $tailer = POE::Component::RemoteTail->spawn();
   my $job = $tailer->job( host => $host, path => $path, user => $user );
   POE::Session->create(
       inlines_states => {
@@ -242,7 +241,7 @@ It can tail several servers at the same time.
 
   use POE::Component::RemoteTail;
   
-  my $tailer = POE::Component::RemoteTail(alias => $alias);
+  my $tailer = POE::Component::RemoteTail->spawn(alias => $alias);
 
   my $job_1 = $tailer->job( host => $host1, path => $path, user => $user );
   my $job_2 = $tailer->job( host => $host2, path => $path, user => $user );
