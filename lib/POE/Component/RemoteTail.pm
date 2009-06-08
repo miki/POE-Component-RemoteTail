@@ -2,21 +2,14 @@ package POE::Component::RemoteTail;
 
 use strict;
 use warnings;
+use Debug::STDERR;
 use POE;
 use POE::Wheel::Run;
 use POE::Component::RemoteTail::Job;
 use Class::Inspector;
-use constant DEBUG => 0;
 use UNIVERSAL::require;
 
-our $VERSION = '0.01007';
-
-*debug = DEBUG
-  ? sub {
-    my $mess = shift;
-    print STDERR $mess, "\n";
-  }
-  : sub { };
+our $VERSION = '0.01008';
 
 sub spawn {
     my $class = shift;
@@ -73,12 +66,14 @@ sub _start {
     my ( $self, $kernel ) = @_[ OBJECT, KERNEL ];
 
     $kernel->alias_set( $self->{alias} );
-    $kernel->sig( INT => "_stop" );
+    $kernel->sig( HUP  => "_stop" );
+    $kernel->sig( INT  => "_stop" );
+    $kernel->sig( QUIT => "_stop" );
+    $kernel->sig( TERM => "_stop" );
 }
 
 sub _stop {
     my ( $self, $kernel, $heap ) = @_[ OBJECT, KERNEL, HEAP ];
-
     my ( $whee_id, $wheel ) = each %{ $heap->{wheel} };
     $wheel and $wheel->kill(9);
 }
@@ -88,10 +83,10 @@ sub _spawn_child {
       @_[ OBJECT, KERNEL, SESSION, HEAP, ARG0, SENDER ];
 
     # prepare ...
-    my $class = $job->{process_class};
-    my $host  = $job->{host};
-    my $path  = $job->{path};
-    my $user  = $job->{user};
+    my $class       = $job->{process_class};
+    my $host        = $job->{host};
+    my $path        = $job->{path};
+    my $user        = $job->{user};
     my $ssh_options = $job->{ssh_options};
     my $add_command = $job->{add_command};
 
@@ -139,14 +134,13 @@ sub _got_child_stdout {
         $heap->{postback}->( $stdout, $host );
     }
     else {
-        print $stdout, $host;
+        print $stdout, $host, "\n";
     }
 }
 
 sub _got_child_stderr {
     my $stderr = $_[ARG0];
     debug("STDERR:$stderr");
-    die("got_child_stderr: $stderr");
 }
 
 sub _got_child_close {

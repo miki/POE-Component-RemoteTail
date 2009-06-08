@@ -20,8 +20,8 @@ sub process_entry {
     my $password = $arg->{password};
     my $cmd      = "tail -f $path";
 
-    my $ssh = Net::SSH::Perl->new( $host, protocol => "2,1" );
-    $ssh->login($user);
+    my $ssh = Net::SSH::Perl->new( $host, protocol => "2", interractive => 0, debug => 9 );
+    $ssh->login($user, $password);
     $ssh->register_handler(
         "stdout",
         sub {
