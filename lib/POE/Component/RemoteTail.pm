@@ -8,8 +8,11 @@ use POE::Wheel::Run;
 use POE::Component::RemoteTail::Job;
 use Class::Inspector;
 use UNIVERSAL::require;
+use Carp;
 
-our $VERSION = '0.01008';
+our $VERSION = '0.01009';
+
+$|++;
 
 sub spawn {
     my $class = shift;
@@ -46,13 +49,14 @@ sub start_tail {
       @_[ OBJECT, KERNEL, SESSION, HEAP, ARG0 ];
 
     $arg->{postback} and $heap->{postback} = $arg->{postback};
+    $arg->{postback_handler}
+      and $heap->{postback_handler} = $arg->{postback_handler};
     $kernel->post( $session, "_spawn_child" => $arg->{job} );
 }
 
 sub stop_tail {
     my ( $self, $kernel, $session, $heap, $arg ) =
       @_[ OBJECT, KERNEL, SESSION, HEAP, ARG0 ];
-
     my $job = $arg->{job};
     debug("STOP:$job->{id}");
     my $wheel = $heap->{wheel}->{ $job->{id} };
@@ -92,7 +96,7 @@ sub _spawn_child {
 
     my $command = "ssh -A";
     $command .= ' ' . $ssh_options if $ssh_options;
-    $command .= " $user\@$host \"tail -f $path";
+    $command .= " $user\@$host \"tail -F $path";
     $command .= ' ' . $add_command if $add_command;
     $command .= '"';
 
@@ -130,8 +134,16 @@ sub _got_child_stdout {
 
     my $host = $heap->{host}->{$wheel_id};
 
-    if ( $heap->{postback} ) {
+    if ( $heap->{postback}
+        and ref $heap->{postback} eq 'POE::Session::AnonEvent' )
+    {
         $heap->{postback}->( $stdout, $host );
+    }
+    elsif ( $heap->{postback_handler}->{child_stdout}
+        and ref $heap->{postback_handler}->{child_stdout} eq
+        'POE::Session::AnonEvent' )
+    {
+        $heap->{postback_handler}->{child_stdout}->( $stdout, $host );
     }
     else {
         print $stdout, $host, "\n";
@@ -139,14 +151,33 @@ sub _got_child_stdout {
 }
 
 sub _got_child_stderr {
-    my $stderr = $_[ARG0];
+    my ( $heap, $stderr ) = @_[ HEAP, ARG0 ];
     debug("STDERR:$stderr");
+    if ( $heap->{postback_handler}->{child_stderr}
+        and ref $heap->{postback_handler}->{child_stderr} eq
+        'POE::Session::AnonEvent' )
+    {
+        $heap->{postback_handler}->{child_stderr}->($stderr);
+    }
+    else {
+        carp("ERROR: $stderr");
+    }
 }
 
 sub _got_child_close {
     my ( $heap, $wheel_id ) = @_[ HEAP, ARG0 ];
     delete $heap->{wheel}->{$wheel_id};
-    debug("CLOSE:$wheel_id");
+    my $host = $heap->{host}->{$wheel_id};
+    debug("CLOSE:$host");
+    if ( $heap->{postback_handler}->{child_close}
+        and ref $heap->{postback_handler}->{child_close} eq
+        'POE::Session::AnonEvent' )
+    {
+        $heap->{postback_handler}->{child_close}->($host);
+    }
+    else {
+        carp("connection was closed by $host:");
+    }
 }
 
 1;
@@ -182,21 +213,34 @@ POE::Component::RemoteTail - tail to remote server's access_log on ssh connectio
       inline_states => {
           _start => sub {
               my ( $kernel, $session ) = @_[ KERNEL, SESSION ];
-              # create postback
-              my $postback = $session->postback("MyPostback");
-  
+              # create postback_handler
+              my $postback_handler = {
+                  child_stdout => $session->postback("child_stdout"),
+                  child_stderr => $session->postback("child_stderr"),
+                  child_close  => $session->postback("child_close"),
+              }; 
               # post to execute
               $kernel->post( $alias,
                   "start_tail" => { job => $job, postback => $postback } );
           },
   
           # return to here
-          MyPostback => sub {
+          child_stdout => sub {
               my ( $kernel, $session, $data ) = @_[ KERNEL, SESSION, ARG1 ];
               my $log  = $data->[0];
               my $host = $data->[1];
               ... do something ...;
           },
+          child_stderr => sub {
+              my $data          = $_[ARG1];
+              my $error_message = $data->[0];
+              ... do something ...;
+          }
+          child_close => sub {
+              my $data        = $_[ARG1];
+              my $closed_host = $data->[0];
+              ... do something ...;
+          }
       },
   );
   
@@ -206,7 +250,9 @@ POE::Component::RemoteTail - tail to remote server's access_log on ssh connectio
 =head1 DESCRIPTION
 
 POE::Component::RemoteTail provides some loop events that tailing access_log on remote host.
-It replaces "ssh -A user@host tail -f access_log" by the same function.
+It replaces "ssh -A user@host tail -F access_log" by the same function.
+( 'tail -F' is same as 'tail --follow=name --retry') 
+
 
 This moduel does not allow 'PasswordAuthentication'. 
 Use RSA or DSA keys, or you must write your Custom Engine with this module.
@@ -215,7 +261,7 @@ Use RSA or DSA keys, or you must write your Custom Engine with this module.
 
 =head1 EXAMPLE
 
-If you don't prepare 'postback', PoCo::RemoteTail outputs log data to child process's STDOUT.
+Unless you prepare the 'postback_handler', PoCo::RemoteTail outputs child process's STDOUT, STDERR and closed host name.
 
   use POE::Component::RemoteTail;
   
@@ -243,18 +289,31 @@ It can tail several servers at the same time.
   POE::Session->create(
       inlines_states => {
           _start => sub {
-              my $postback = $session->postback("MyPostback");
-              $kernel->post($alias, "start_tail" => {job => $job_1, postback => $postback}); 
-              $kernel->post($alias, "start_tail" => {job => $job_2, postback => $postback}); 
+              my $postback_handler = {
+                  child_stdout => $session->postback("child_stdout"),
+                  child_stderr => $session->postback("child_stderr"),
+                  child_close  => $session->postback("child_close"),
+              }; 
+              $kernel->post($alias, "start_tail" => {job => $job_1, postback_handler => $postback_handler }); 
+              $kernel->post($alias, "start_tail" => {job => $job_2, postback_handler => $postback_handler}); 
               $kernel->delay_add("stop_tail", 10, [ $job_1 ]);
               $kernel->delay_add("stop_tail", 20, [ $job_1 ]);
           },
-          MyPostback => sub {
+          child_stdout => sub {
               my ( $kernel, $session, $data ) = @_[ KERNEL, SESSION, ARG1 ];
               my $log  = $data->[0];
               my $host = $data->[1];
               ... do something ...;
           },
+          child_stderr => sub {
+              my $data          = $_[ARG1];
+              my $error_message = $data->[0];
+              ... do something ...;
+          }
+          child_close => sub {
+              my $data        = $_[ARG1];
+              my $closed_host = $data->[0];
+              ... do something ...;
           stop_tail => sub {
               my ( $kernel, $session, $arg ) = @_[ KERNEL, SESSION, ARG0 ];
               my $target_job = $arg->[0];

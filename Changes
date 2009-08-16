@@ -1,5 +1,9 @@
 Revision history for Perl extension POE::Component::RemoteTail
 
+0.01009     2009/08/13
+        - change an option of 'tail' command ( tail -F )
+        - add postback_handler ( not only 'child_stdout' but also 'child_stderr' and 'child_close' )
+
 0.01008     2009/06/08
         - add %SIG trap
         - improve debug option ( use Debug::STDERROR )  
