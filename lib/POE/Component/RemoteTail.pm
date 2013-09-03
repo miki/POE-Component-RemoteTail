@@ -10,7 +10,7 @@ use Class::Inspector;
 use UNIVERSAL::require;
 use Carp;
 
-our $VERSION = '0.01009';
+our $VERSION = '0.01011';
 
 $|++;
 
@@ -78,8 +78,9 @@ sub _start {
 
 sub _stop {
     my ( $self, $kernel, $heap ) = @_[ OBJECT, KERNEL, HEAP ];
-    my ( $whee_id, $wheel ) = each %{ $heap->{wheel} };
-    $wheel and $wheel->kill(9);
+    while ( my ( $whee_id, $wheel ) = each %{ $heap->{wheel} } ) {
+        $wheel and $wheel->kill(9);
+    }
 }
 
 sub _spawn_child {
@@ -194,10 +195,9 @@ POE::Component::RemoteTail - tail to remote server's access_log on ssh connectio
   use POE::Component::RemoteTail;
   
   my ( $host, $path, $user ) = @target_host_info;
-  my $alias = 'Remote_Tail';
   
   # spawn component
-  my $tailer = POE::Component::RemoteTail->spawn( alias => $alias );
+  my $tailer = POE::Component::RemoteTail->spawn();
   
   # create job
   my $job = $tailer->job(
@@ -220,8 +220,8 @@ POE::Component::RemoteTail - tail to remote server's access_log on ssh connectio
                   child_close  => $session->postback("child_close"),
               }; 
               # post to execute
-              $kernel->post( $alias,
-                  "start_tail" => { job => $job, postback => $postback } );
+              $kernel->post( tailer => start_tail => { 
+                  job => $job, postback_handler => $postback_handler } );
           },
   
           # return to here
@@ -295,7 +295,7 @@ It can tail several servers at the same time.
                   child_close  => $session->postback("child_close"),
               }; 
               $kernel->post($alias, "start_tail" => {job => $job_1, postback_handler => $postback_handler }); 
-              $kernel->post($alias, "start_tail" => {job => $job_2, postback_handler => $postback_handler}); 
+              $kernel->post($alias, "start_tail" => {job => $job_2, postback_handler => $postback_handler }); 
               $kernel->delay_add("stop_tail", 10, [ $job_1 ]);
               $kernel->delay_add("stop_tail", 20, [ $job_1 ]);
           },
