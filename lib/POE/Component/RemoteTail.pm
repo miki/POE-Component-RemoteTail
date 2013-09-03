@@ -79,7 +79,7 @@ sub _start {
 sub _stop {
     my ( $self, $kernel, $heap ) = @_[ OBJECT, KERNEL, HEAP ];
     while ( my ( $whee_id, $wheel ) = each %{ $heap->{wheel} } ) {
-        $wheel and $wheel->kill(9);
+        $wheel and $wheel->kill;
     }
 }
 
@@ -111,8 +111,6 @@ sub _spawn_child {
         %program = ( Program => sub { $class->process_entry($job) }, );
     }
 
-    $SIG{CHLD} = "IGNORE";
-
     # run wheel
     my $wheel = POE::Wheel::Run->new(
         %program,
@@ -122,10 +120,16 @@ sub _spawn_child {
         CloseEvent  => "_got_child_close",
     );
 
+    $kernel->sig_child($wheel->PID => '_sig_child');
+
     my $id = $wheel->ID;
     $heap->{wheel}->{$id} = $wheel;
     $heap->{host}->{$id}  = $host;
     $job->{id}            = $id;
+}
+
+sub _sig_child {
+    debug("STDOUT:reaped pid:$_[ARG1]");
 }
 
 sub _got_child_stdout {
