@@ -59,9 +59,9 @@ sub stop_tail {
       @_[ OBJECT, KERNEL, SESSION, HEAP, ARG0 ];
     my $job = $arg->{job};
     debug("STOP:$job->{id}");
-    my $wheel = $heap->{wheel}->{ $job->{id} };
-    $wheel->kill(9);
-    delete $heap->{wheel}->{ $job->{id} };
+    if (my $wheel = delete $heap->{wheel}->{ $job->{id} }) {
+        $wheel->kill;
+    }
     delete $heap->{host}->{ $job->{id} };
     undef $job;
 }
