@@ -10,7 +10,7 @@ use Class::Inspector;
 use UNIVERSAL::require;
 use Carp;
 
-our $VERSION = '0.01009';
+our $VERSION = '0.01011';
 
 $|++;
 
@@ -59,9 +59,9 @@ sub stop_tail {
       @_[ OBJECT, KERNEL, SESSION, HEAP, ARG0 ];
     my $job = $arg->{job};
     debug("STOP:$job->{id}");
-    my $wheel = $heap->{wheel}->{ $job->{id} };
-    $wheel->kill(9);
-    delete $heap->{wheel}->{ $job->{id} };
+    if (my $wheel = delete $heap->{wheel}->{ $job->{id} }) {
+        $wheel->kill;
+    }
     delete $heap->{host}->{ $job->{id} };
     undef $job;
 }
@@ -78,8 +78,9 @@ sub _start {
 
 sub _stop {
     my ( $self, $kernel, $heap ) = @_[ OBJECT, KERNEL, HEAP ];
-    my ( $whee_id, $wheel ) = each %{ $heap->{wheel} };
-    $wheel and $wheel->kill(9);
+    while ( my ( $whee_id, $wheel ) = each %{ $heap->{wheel} } ) {
+        $wheel and $wheel->kill;
+    }
 }
 
 sub _spawn_child {
@@ -110,8 +111,6 @@ sub _spawn_child {
         %program = ( Program => sub { $class->process_entry($job) }, );
     }
 
-    $SIG{CHLD} = "IGNORE";
-
     # run wheel
     my $wheel = POE::Wheel::Run->new(
         %program,
@@ -119,12 +118,19 @@ sub _spawn_child {
         StdoutEvent => "_got_child_stdout",
         StderrEvent => "_got_child_stderr",
         CloseEvent  => "_got_child_close",
+        Conduit     => 'pty-pipe',
     );
+
+    $kernel->sig_child($wheel->PID => '_sig_child');
 
     my $id = $wheel->ID;
     $heap->{wheel}->{$id} = $wheel;
     $heap->{host}->{$id}  = $host;
     $job->{id}            = $id;
+}
+
+sub _sig_child {
+    debug("STDOUT:reaped pid:$_[ARG1]");
 }
 
 sub _got_child_stdout {
@@ -194,10 +200,9 @@ POE::Component::RemoteTail - tail to remote server's access_log on ssh connectio
   use POE::Component::RemoteTail;
   
   my ( $host, $path, $user ) = @target_host_info;
-  my $alias = 'Remote_Tail';
   
   # spawn component
-  my $tailer = POE::Component::RemoteTail->spawn( alias => $alias );
+  my $tailer = POE::Component::RemoteTail->spawn();
   
   # create job
   my $job = $tailer->job(
@@ -220,8 +225,8 @@ POE::Component::RemoteTail - tail to remote server's access_log on ssh connectio
                   child_close  => $session->postback("child_close"),
               }; 
               # post to execute
-              $kernel->post( $alias,
-                  "start_tail" => { job => $job, postback => $postback } );
+              $kernel->post( tailer => start_tail => { 
+                  job => $job, postback_handler => $postback_handler } );
           },
   
           # return to here
@@ -295,7 +300,7 @@ It can tail several servers at the same time.
                   child_close  => $session->postback("child_close"),
               }; 
               $kernel->post($alias, "start_tail" => {job => $job_1, postback_handler => $postback_handler }); 
-              $kernel->post($alias, "start_tail" => {job => $job_2, postback_handler => $postback_handler}); 
+              $kernel->post($alias, "start_tail" => {job => $job_2, postback_handler => $postback_handler }); 
               $kernel->delay_add("stop_tail", 10, [ $job_1 ]);
               $kernel->delay_add("stop_tail", 20, [ $job_1 ]);
           },

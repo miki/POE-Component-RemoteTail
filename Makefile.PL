@@ -8,9 +8,7 @@ requires 'Class::Inspector';
 requires 'constant';
 requires 'UNIVERSAL::require';
 requires 'Debug::STDERR';
-build_requires 'Test::More';
-build_requires 'YAML';
-build_requires 'List::Util';
+test_requires 'Test::More';
 
 use_test_base;
 auto_include;
