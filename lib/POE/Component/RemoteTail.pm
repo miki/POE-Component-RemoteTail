@@ -118,7 +118,7 @@ sub _spawn_child {
         StdoutEvent => "_got_child_stdout",
         StderrEvent => "_got_child_stderr",
         CloseEvent  => "_got_child_close",
-        Conduit     => 'pty',
+        Conduit     => 'pty-pipe',
     );
 
     $kernel->sig_child($wheel->PID => '_sig_child');
